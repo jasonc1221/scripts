@@ -15,7 +15,7 @@ class TheWayChurchFinance:
         self.account_history_file = 'AccountHistory.csv'
         self.finance_df = {}
 
-        # self.get_args()
+        self.get_args()
         self.main()
         print('**********PROGRAM RAN SUCCESSFULLY**********')
         # close = input('Press any key to close')
@@ -36,7 +36,7 @@ class TheWayChurchFinance:
         self.end_date = ''
 
     def main(self):
-        # create_copy_of_old_finance_sheet()
+        self.create_copy_of_old_finance_sheet()
         
         # Creating pd.Dataframe of files
         self.account_codes = self.get_dataframe_of_file(self.account_codes_file)
@@ -69,11 +69,11 @@ class TheWayChurchFinance:
         if not os.path.isdir(copy_folder):
             os.mkdir(copy_folder) 
 
-        if finance_file in os.listdir():
+        if self.finance_file in os.listdir():
             print('Creating copy of old finance sheet')
             now = datetime.datetime.now()
             month_day_year_hour_min = now.strftime('%m_%d_%Y_%H_%M')
-            old_file = os.path.join(os.getcwd(), finance_file)
+            old_file = os.path.join(os.getcwd(), self.finance_file)
             old_copy_file = os.path.join(os.getcwd(), f'copy/TheWayChurchFinance_{month_day_year_hour_min}.xlsx')
             shutil.copy(old_file, old_copy_file)
 
@@ -91,9 +91,47 @@ class TheWayChurchFinance:
     def write_finance_sheet(self):
         # finance_df is a dict of pandas.DataFrame
         # Create or overwrite sheet
-        with pd.ExcelWriter(self.finance_file) as writer:
+        with pd.ExcelWriter(self.finance_file, engine='xlsxwriter') as writer:
+            workbook  = writer.book
+
+            # Get all month_years to date
+            month_year = []
+            date = self.start_datetime
+            while date < self.end_datetime:
+                month_year_text = date.strftime('%h%Y')
+                month_year.append(month_year_text)
+                # Increment date month by 1
+                date = date + relativedelta(months=+1)
+            
+            # Putting All Sheets into xlsx
             for sheet in self.finance_df:
-                self.finance_df[sheet].to_excel(writer, sheet_name=sheet, index=False)
+                sheet_name = sheet
+
+                startcol = 0 
+                # # Post DF starts +1 column away from Signed DF
+                if ' ' in sheet:
+                    if 'Post' in sheet:
+                        # startcol = len(self.finance_df[sheet].columns) + 1
+                        pass
+                    temp_sheet_name = sheet_name.split()[0]
+                
+                self.finance_df[sheet].to_excel(writer, sheet_name=sheet_name, index=False, startcol=startcol)
+                worksheet = writer.sheets[sheet_name]
+
+                # Get the dimensions of the dataframe.
+                (max_row, max_col) = self.finance_df[sheet].shape
+
+                # Set the autofilter.
+                worksheet.autofilter(0, 0, max_row, max_col - 1)
+
+                # Make the columns wider for clarity
+                worksheet.set_column(0,  max_col - 1, 15)
+                money_format = workbook.add_format({'num_format': '$#,##0.00'})
+                # Formatting Money Columns
+                if sheet_name == 'AccountCodeBalance':
+                    worksheet.set_column(5, 5+len(month_year), None, money_format)
+                elif 'Post' in sheet_name or 'Signed' in sheet_name:
+                    worksheet.set_column(2, 3, None, money_format)
 
     def extract_account_codes(self):
         print('Extracting Account Codes')
@@ -192,7 +230,7 @@ class TheWayChurchFinance:
             for index, row in account_codes_balance_df.iterrows():
                 account = int(row['Account'])
                 if self.account_codes_extracted.get(account):
-                    month_year_sum = str(self.account_codes_extracted[account].get(month_year_text, '0'))
+                    month_year_sum = self.account_codes_extracted[account].get(month_year_text, 0)
                     account_codes_balance_df.at[index, month_year_text] = month_year_sum
             
             # Increment date month by 1
@@ -209,9 +247,9 @@ class TheWayChurchFinance:
         j_checks = set(self.journal_checks.keys())
         ah_checks = set(self.account_history_checks.keys())
         checks_matching = j_checks & ah_checks
-        print('Total Journal Checks:', len(j_checks))
-        print('Total AccountHistory Checks:', len(ah_checks))
-        print('Journal Checks in AccountHistory Checks:', len(checks_matching))
+        # print('Total Journal Checks:', len(j_checks))
+        # print('Total AccountHistory Checks:', len(ah_checks))
+        # print('Journal Checks in AccountHistory Checks:', len(checks_matching))
 
         # checks_matching data
         matched_checks_dict = {}
@@ -223,14 +261,14 @@ class TheWayChurchFinance:
             matched_sum = round(matched_sum, 2)
         start_month_day_year = self.start_datetime.strftime('%h %d %Y')
         end_month_day_year = self.end_datetime.strftime('%h %d %Y')
-        print(f'Sum of Journal Checks in AccountHistory between {start_month_day_year} - {end_month_day_year}: ${matched_sum}')
+        # print(f'Sum of Journal Checks in AccountHistory between {start_month_day_year} - {end_month_day_year}: ${matched_sum}')
         
         # Create matched_checks_df for all months
         matched_checks_dfs = {}
         latest_month = ''
         date = self.start_datetime
         while date < self.end_datetime:
-            month_year_text = date.strftime('%h %Y')
+            month_year_text = date.strftime('%h%Y')
             latest_month = month_year_text
             month_year_signed_text = f'{month_year_text} Signed'
             month_year_posted_text = f'{month_year_text} Post'
@@ -255,7 +293,7 @@ class TheWayChurchFinance:
                 new_row_data['Paid'] = payment
                 new_row_data['Post Date'] = matched_checks_dict[check]['Post Date']
                 # Adding to appropriate Month Year Post Sheet
-                post_month_year_text = datetime.datetime.strptime(new_row_data['Post Date'], '%m/%d/%Y').strftime('%h %Y')
+                post_month_year_text = datetime.datetime.strptime(new_row_data['Post Date'], '%m/%d/%Y').strftime('%h%Y')
                 month_year_posted_text = f'{post_month_year_text} Post'
                 matched_checks_dfs[month_year_posted_text] = matched_checks_dfs[month_year_posted_text].append(new_row_data, ignore_index=True)
             else:
@@ -263,7 +301,7 @@ class TheWayChurchFinance:
                 unmatched_checks.append(new_row_data)
             
             # Adding to appropriate Month Year Signed Sheet
-            sign_month_year_text = datetime.datetime.strptime(new_row_data['Signed Date'], '%m/%d/%Y').strftime('%h %Y')
+            sign_month_year_text = datetime.datetime.strptime(new_row_data['Signed Date'], '%m/%d/%Y').strftime('%h%Y')
             month_year_signed_text = f'{sign_month_year_text} Signed'
             matched_checks_dfs[month_year_signed_text] = matched_checks_dfs[month_year_signed_text].append(new_row_data, ignore_index=True)
         
@@ -274,3 +312,7 @@ class TheWayChurchFinance:
 
         # Adding all matched_checks_dfs into finance_df
         self.finance_df.update(matched_checks_dfs)
+
+
+if __name__ == '__main__':
+    the_way_church_finance = TheWayChurchFinance()
