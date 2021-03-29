@@ -36,7 +36,7 @@ class TheWayChurchFinance:
         self.end_date = ''
 
     def main(self):
-        create_copy_of_old_finance_sheet()
+        self.create_copy_of_old_finance_sheet()
         
         # Creating pd.Dataframe of files
         self.account_codes = self.get_dataframe_of_file(self.account_codes_file)
@@ -69,11 +69,11 @@ class TheWayChurchFinance:
         if not os.path.isdir(copy_folder):
             os.mkdir(copy_folder) 
 
-        if finance_file in os.listdir():
+        if self.finance_file in os.listdir():
             print('Creating copy of old finance sheet')
             now = datetime.datetime.now()
             month_day_year_hour_min = now.strftime('%m_%d_%Y_%H_%M')
-            old_file = os.path.join(os.getcwd(), finance_file)
+            old_file = os.path.join(os.getcwd(), self.finance_file)
             old_copy_file = os.path.join(os.getcwd(), f'copy/TheWayChurchFinance_{month_day_year_hour_min}.xlsx')
             shutil.copy(old_file, old_copy_file)
 
