@@ -8,16 +8,15 @@ import shutil
 class TheWayChurchFinance:
     def __init__(self):
         self.finance_file = 'TheWayChurchFinance.xlsx'
-        self.start_date = '1/2021'
-        self.start_datetime = datetime.datetime.strptime('01/2021', '%m/%Y')
+        self.start_date = '01/2021'
         self.end_date = ''
-        self.end_datetime = datetime.datetime.now()
         self.account_codes_file = 'AccountCodes.xlsx'
         self.journal_file = 'journal.xlsx'
         self.account_history_file = 'AccountHistory.csv'
+        self.finance_df = {}
 
         # self.get_args()
-        # self.main()
+        self.main()
         print('**********PROGRAM RAN SUCCESSFULLY**********')
         # close = input('Press any key to close')
     
@@ -40,24 +39,30 @@ class TheWayChurchFinance:
         # create_copy_of_old_finance_sheet()
         
         # Creating pd.Dataframe of files
-        account_codes = self.get_dataframe_of_file(self.account_codes_file)
-        journal = self.get_dataframe_of_file(self.journal_file)
-        account_history = self.get_dataframe_of_file(self.account_history_file)
+        self.account_codes = self.get_dataframe_of_file(self.account_codes_file)
+        self.journal = self.get_dataframe_of_file(self.journal_file)
+        self.account_history = self.get_dataframe_of_file(self.account_history_file)
     
         # Creating the start and end datetime variables
-        self.start_datetime = datetime.datetime.strptime(args.start_date, '%m/%Y') if args.start_date else datetime.datetime.strptime('01/2021', '%m/%Y')
-        self.end_datetime = datetime.datetime.strptime(args.end_date, '%m/%Y') if args.end_date else datetime.datetime.now()
+        self.start_datetime = datetime.datetime.strptime(self.start_date, '%m/%Y') if self.start_date else datetime.datetime.strptime('01/2021', '%m/%Y')
+        self.end_datetime = datetime.datetime.strptime(self.end_date, '%m/%Y') if self.end_date else datetime.datetime.now()
 
         # Extracting data from files
-        account_codes_extracted = self.extract_account_codes(account_codes)
-        journal_checks = self.extract_journal_checks(journal, account_codes_extracted)
-        account_history_checks = self.extract_account_history_checks(account_history)
+        self.account_codes_extracted = self.extract_account_codes()
+        self.journal_checks = self.extract_journal_checks()
+        self.account_history_checks = self.extract_account_history_checks()
 
         # Creating Excel with data extracted
-        self.create_update_finance_sheet_AccountCodeBalance(account_codes, account_codes_extracted)
-        self.create_update_finance_sheet_MatchedChecks(journal_checks, account_history_checks)
+        self.create_finance_sheet_AccountCodeBalance()
+        self.create_finance_sheet_MatchedChecks()
+        self.write_finance_sheet()
     
-    
+    def raise_exception(self, file_name, error_msg, index, row,  index_offset=2):
+        print(f'____________FIX ERROR in {file_name}____________')
+        print(f'{error_msg} in {file_name}')
+        print(f'ROW #{index + index_offset}')
+        print(row)
+        raise Exception(f'{error_msg} in {file_name}')
 
     def create_copy_of_old_finance_sheet(self):
         copy_folder = os.path.join(os.getcwd(), 'copy')
@@ -83,28 +88,17 @@ class TheWayChurchFinance:
         if '.xlsx' in file_name:
             return pd.read_excel(file_name)
 
-    def create_update_finance_sheet(self, sheet_name, default_df=None):
-        if finance_file in os.listdir():
-            print('Using existing file')
-            finance_df = pd.read_excel(finance_file, sheet_name=None)
-            df = finance_df.get(sheet_name)
-        else:
-            print('Creating new sheet')
-            finance_df = {}
-            df = default_df.copy(deep=True) if type(default_df) != type(None) else None
-        return finance_df, df
-
-    def write_finance_sheet(self, finance_df):
+    def write_finance_sheet(self):
         # finance_df is a dict of pandas.DataFrame
         # Create or overwrite sheet
-        with pd.ExcelWriter(finance_file) as writer:
-            for sheet in finance_df:
-                finance_df[sheet].to_excel(writer, sheet_name=sheet, index=False)
+        with pd.ExcelWriter(self.finance_file) as writer:
+            for sheet in self.finance_df:
+                self.finance_df[sheet].to_excel(writer, sheet_name=sheet, index=False)
 
-    def extract_account_codes(self, account_codes):
-        print('Extacting Account Codes')
+    def extract_account_codes(self):
+        print('Extracting Account Codes')
         account_codes_extracted = {}
-        for index, row in account_codes.iterrows():
+        for index, row in self.account_codes.iterrows():
             row_data = {
                 'Account Group Name': row['Account Group Name'] if not pd.isna(row['Account Group Name']) else '',
                 'Account Group': int(row['Account Group']) if not pd.isna(row['Account Group']) else 0,
@@ -113,59 +107,65 @@ class TheWayChurchFinance:
             }
             if pd.isna(row['Account Group']):
                 continue
-            if:
-                if row_data['Account'] in account_codes_extracted:
-                    raise Exception('Duplcate Account in AccountCodes.xlsx')
+            if row_data['Account'] in account_codes_extracted:
+                self.raise_exception(self.account_codes_file, 'Duplicate Account', index, row)
             else:
                 account_codes_extracted[row_data['Account']] = row_data
         return account_codes_extracted
 
-    def extract_journal_checks(self, journal, account_codes_extracted):
-        print('Extacting Journal Checks')
+    def extract_journal_checks(self):
+        print('Extracting Journal Checks')
         journal_checks = {}
-        for index, row in journal.iterrows():
+        for index, row in self.journal.iterrows():
             # Check if timestamp of check is between start and end datetime
             date = row['Date']
-            if start_datetime < date and date < end_datetime:
-                row_data = {
-                    'Account': int(row['Account'].split()[0]) if row['Account'] != '-split-' else '',
-                    'Payment': row['Payment'] if not pd.isna(row['Payment']) else 0,
-                    'Deposit': row['Deposit'] if not pd.isna(row['Deposit']) else 0,
-                    'Date': row['Date'].strftime('%m/%d/%Y')
-                }
+            if self.start_datetime < date < self.end_datetime:
+                # Ignore deposits and stop on -split- rows
+                if row['Account'] == '-split-':
+                    # Ignore deposit rows
+                    deposit = row['Deposit'] if not pd.isna(row['Deposit']) else 0
+                    if deposit:
+                        continue
+                        # old code for adding up deposits
+                        # self.account_codes_extracted[0][month_year_text] = self.account_codes_extracted[0].get(month_year_text, 0) + row_data['Deposit']
+                    else:
+                        account_code = row['Account']
+                        self.raise_exception(self.journal_file, f'Invalid Account Code {account_code}', index, row)
+                try:
+                    row_data = {
+                        'Account': int(row['Account'].split()[0]) if not str(row['Account']).isdigit() else int(row['Account']),
+                        'Payment': row['Payment'] if not pd.isna(row['Payment']) else 0,
+                        'Deposit': row['Deposit'] if not pd.isna(row['Deposit']) else 0,
+                        'Date': row['Date'].strftime('%m/%d/%Y')
+                    }
+                except:
+                    self.raise_exception(self.journal_file, f'Bad Row', index, row)
                 # Get month year of the journal check e.g Jan 2021, Feb 2021, Mar 2021...
                 month_year_text = date.strftime('%h %Y')
-                # Handle deposits and alert of -split- rows
-                if row['Account'] == '-split-':
-                    if row_data['Deposit']:
-                        account_codes_extracted[0][month_year_text] = account_codes_extracted[0].get(month_year_text, 0) + row_data['Deposit']
-                    else:
-                        print(index)
-                        print(row)
-                        raise Exception('Invalid Account Code in journal.xlsx -split-')
-                    continue
-                
                 # Add to Account Code month sum
-                if not pd.isna(row['Number']) and type(row['Number']) == int: # Check Number
-                    journal_checks[int(row['Number'])] = row_data
-                if account_codes_extracted.get(row_data['Account']):
-                    account_codes_extracted[row_data['Account']][month_year_text] = account_codes_extracted[row_data['Account']].get(month_year_text, 0) + row_data['Payment']
-                    account_codes_extracted[row_data['Account']][month_year_text] = round(account_codes_extracted[row_data['Account']][month_year_text], 2)
+                if not pd.isna(row['Number']) and str(row['Number']).isdigit(): # Check Number
+                    check_num = int(row['Number'])
+                    if check_num in journal_checks:
+                        self.raise_exception(self.journal_file, f'Duplicate Check Number {check_num}', index, row)
+                    else:
+                        journal_checks[int(row['Number'])] = row_data
+                if self.account_codes_extracted.get(row_data['Account']):
+                    self.account_codes_extracted[row_data['Account']][month_year_text] = self.account_codes_extracted[row_data['Account']].get(month_year_text, 0) + row_data['Payment']
+                    self.account_codes_extracted[row_data['Account']][month_year_text] = round(self.account_codes_extracted[row_data['Account']][month_year_text], 2)
                 else:
-                    print(index)
-                    print(row)
-                    raise Exception('Invalid Account Code in journal.xlsx')
+                    account_code = row['Account']
+                    self.raise_exception(self.journal_file, f'Invalid Account Code {account_code}', index, row)
+
         return journal_checks
                     
-    def extract_account_history_checks(self, account_history):
-        print('Extacting AccountHistory Checks')
+    def extract_account_history_checks(self):
+        print('Extracting AccountHistory Checks')
         account_history_checks = {}
-        for index, row in account_history.iterrows():
+        for index, row in self.account_history.iterrows():
             date = datetime.datetime.strptime(row['Post Date'], '%m/%d/%Y')
-            if start_datetime < date and date < end_datetime:
+            if self.start_datetime < date < self.end_datetime:
                 row_data = {
-                    # 'Post Date': datetime.datetime.strptime(row['Post Date'], '%m/%d/%Y'),
-                    'Post Date': row['Post Date'],
+                    'Post Date': date.strftime('%m/%d/%Y'),
                     'Debit': row['Debit'] if not pd.isna(row['Debit']) else 0,
                     'Credit': row['Credit'] if not pd.isna(row['Credit']) else 0,
                 }
@@ -176,13 +176,13 @@ class TheWayChurchFinance:
                     account_history_checks[check_num] = row_data
         return account_history_checks
 
-    def create_update_finance_sheet_AccountCodeBalance(self, account_codes, account_codes_extracted):
-        print('Creating/Updating Finance Sheet AccountCodeBalance')
+    def create_finance_sheet_AccountCodeBalance(self):
+        print('Creating Finance Sheet AccountCodeBalance')
         sheet_name = 'AccountCodeBalance'
-        finance_df, account_codes_balance_df = create_update_finance_sheet(sheet_name, account_codes)
-        # Update or Create columns with month_year_sum from account_codes_extracted
-        date = start_datetime
-        while date < end_datetime:
+        account_codes_balance_df = self.account_codes.copy(deep=True)
+        # Create columns with month_year_sum from account_codes_extracted
+        date = self.start_datetime
+        while date < self.end_datetime:
             # Create new month year column if does not exist
             month_year_text = date.strftime('%h %Y')
             if month_year_text not in account_codes_balance_df.columns:
@@ -191,26 +191,23 @@ class TheWayChurchFinance:
             # Change value of month year sum if sum exists
             for index, row in account_codes_balance_df.iterrows():
                 account = int(row['Account'])
-                if account_codes_extracted.get(account):
-                    month_year_sum = str(account_codes_extracted[account].get(month_year_text, '0'))
+                if self.account_codes_extracted.get(account):
+                    month_year_sum = str(self.account_codes_extracted[account].get(month_year_text, '0'))
                     account_codes_balance_df.at[index, month_year_text] = month_year_sum
             
             # Increment date month by 1
             date = date + relativedelta(months=+1)
         
-        # Overwrite existing AccountCodeBalance sheet
-        finance_df[sheet_name] = account_codes_balance_df
-        self.write_finance_sheet(finance_df)
+        # Create AccountCodeBalance sheet
+        self.finance_df[sheet_name] = account_codes_balance_df
 
-    def create_update_finance_sheet_MatchedChecks(self, journal_checks, account_history_checks):
-        # TODO Add Date when check was written
-        print('Creating/Updating Finance Sheet MatchedChecks')
+    def create_finance_sheet_MatchedChecks(self):
+        print('Creating Finance Sheet MatchedChecks')
         sheet_name = 'MatchedChecks'
-        finance_df, matched_checks_df = create_update_finance_sheet(sheet_name)
 
         # Check what Journal checks match in AccountHistory Checks
-        j_checks = set(journal_checks.keys())
-        ah_checks = set(account_history_checks.keys())
+        j_checks = set(self.journal_checks.keys())
+        ah_checks = set(self.account_history_checks.keys())
         checks_matching = j_checks & ah_checks
         print('Total Journal Checks:', len(j_checks))
         print('Total AccountHistory Checks:', len(ah_checks))
@@ -220,48 +217,60 @@ class TheWayChurchFinance:
         matched_checks_dict = {}
         matched_sum = 0
         for check in checks_matching:
-            matched_checks_dict[check] = journal_checks[check]
-            matched_checks_dict[check]['Post Date'] = account_history_checks[check]['Post Date']
-            matched_sum += journal_checks[check]['Payment']
+            matched_checks_dict[check] = self.journal_checks[check]
+            matched_checks_dict[check]['Post Date'] = self.account_history_checks[check]['Post Date']
+            matched_sum += self.journal_checks[check]['Payment']
             matched_sum = round(matched_sum, 2)
-        start_month_day_year = start_datetime.strftime('%h %d %Y')
-        end_month_day_year = end_datetime.strftime('%h %d %Y')
+        start_month_day_year = self.start_datetime.strftime('%h %d %Y')
+        end_month_day_year = self.end_datetime.strftime('%h %d %Y')
         print(f'Sum of Journal Checks in AccountHistory between {start_month_day_year} - {end_month_day_year}: ${matched_sum}')
         
-        if type(matched_checks_df) != type(None):
-            print('Updating Pending Checks')
-            for index, row in matched_checks_df.iterrows():
-                # Go to next row if check is processed
-                if float(row['Paid']):
-                    continue
-                # Verify if check has been processed and change Paid equal to Pending and Pending to 0
-                elif float(row['Pending']):
-                    if int(row['Check #']) in matched_checks_dict:
-                        matched_checks_df.at[index, 'Paid'] = row['Pending']
-                        matched_checks_df.at[index, 'Pending'] = 0
-                        matched_checks_df.at[index, 'Post Date'] = matched_checks_dict[row['Check #']]['Post Date']
-        else:
-            print(f'Creating new {sheet_name}')
-            matched_checks_df = pd.DataFrame(columns=['Check #', 'Account', 'Paid', 'Pending', 'Signed Date', 'Post Date'])
-        
-        print(f'Adding new Journal Checks to {sheet_name}')
-        for check in journal_checks:
-            if check not in matched_checks_df['Check #'].to_list():
-                new_row_data = {
-                    'Check #': check, 
-                    'Account': journal_checks[check]['Account'], 
-                    'Paid': 0, 
-                    'Pending': 0,
-                    'Signed Date': journal_checks[check]['Date'],
-                    'Post Date': ''
-                }
-                payment = journal_checks[check]['Payment']
-                if check in matched_checks_dict:
-                    new_row_data['Paid'] = payment
-                    new_row_data['Post Date'] = matched_checks_dict[check]['Post Date']
-                else:
-                    new_row_data['Pending'] = payment
-                matched_checks_df = matched_checks_df.append(new_row_data, ignore_index=True)
+        # Create matched_checks_df for all months
+        matched_checks_dfs = {}
+        latest_month = ''
+        date = self.start_datetime
+        while date < self.end_datetime:
+            month_year_text = date.strftime('%h %Y')
+            latest_month = month_year_text
+            month_year_signed_text = f'{month_year_text} Signed'
+            month_year_posted_text = f'{month_year_text} Post'
+            matched_checks_dfs[month_year_signed_text] = pd.DataFrame(columns=['Check #', 'Account', 'Paid', 'Pending', 'Signed Date', 'Post Date'])
+            matched_checks_dfs[month_year_posted_text] = pd.DataFrame(columns=['Check #', 'Account', 'Paid', 'Pending', 'Signed Date', 'Post Date'])
+            # Increment date month by 1
+            date = date + relativedelta(months=+1)
 
-        finance_df[sheet_name] = matched_checks_df
-        self.write_finance_sheet(finance_df)
+        unmatched_checks = []
+        # Put checks in correct months
+        for check in self.journal_checks:
+            new_row_data = {
+                'Check #': check, 
+                'Account': self.journal_checks[check]['Account'], 
+                'Paid': 0, 
+                'Pending': 0,
+                'Signed Date': self.journal_checks[check]['Date'],
+                'Post Date': ''
+            }
+            payment = self.journal_checks[check]['Payment']
+            if check in matched_checks_dict:
+                new_row_data['Paid'] = payment
+                new_row_data['Post Date'] = matched_checks_dict[check]['Post Date']
+                # Adding to appropriate Month Year Post Sheet
+                post_month_year_text = datetime.datetime.strptime(new_row_data['Post Date'], '%m/%d/%Y').strftime('%h %Y')
+                month_year_posted_text = f'{post_month_year_text} Post'
+                matched_checks_dfs[month_year_posted_text] = matched_checks_dfs[month_year_posted_text].append(new_row_data, ignore_index=True)
+            else:
+                new_row_data['Pending'] = payment
+                unmatched_checks.append(new_row_data)
+            
+            # Adding to appropriate Month Year Signed Sheet
+            sign_month_year_text = datetime.datetime.strptime(new_row_data['Signed Date'], '%m/%d/%Y').strftime('%h %Y')
+            month_year_signed_text = f'{sign_month_year_text} Signed'
+            matched_checks_dfs[month_year_signed_text] = matched_checks_dfs[month_year_signed_text].append(new_row_data, ignore_index=True)
+        
+        # Adding all unmatched checks to latest Month Year Post Sheet
+        month_year_posted_text = f'{latest_month} Post'
+        for unmatched_check in unmatched_checks:
+            matched_checks_dfs[month_year_posted_text] = matched_checks_dfs[month_year_posted_text].append(unmatched_check, ignore_index=True)
+
+        # Adding all matched_checks_dfs into finance_df
+        self.finance_df.update(matched_checks_dfs)
