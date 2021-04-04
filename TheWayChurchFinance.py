@@ -15,7 +15,7 @@ class TheWayChurchFinance:
         self.account_history_file = 'AccountHistory.csv'
         self.finance_df = {}
 
-        # self.get_args()
+        self.get_args()
         self.main()
         print('**********PROGRAM RAN SUCCESSFULLY**********')
         # close = input('Press any key to close')
@@ -36,7 +36,7 @@ class TheWayChurchFinance:
         self.end_date = ''
 
     def main(self):
-        # self.create_copy_of_old_finance_sheet()
+        self.create_copy_of_old_finance_sheet()
         
         # Creating pd.Dataframe of files
         self.account_codes = self.get_dataframe_of_file(self.account_codes_file)
