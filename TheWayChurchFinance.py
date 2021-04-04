@@ -15,7 +15,7 @@ class TheWayChurchFinance:
         self.account_history_file = 'AccountHistory.csv'
         self.finance_df = {}
 
-        self.get_args()
+        # self.get_args()
         self.main()
         print('**********PROGRAM RAN SUCCESSFULLY**********')
         # close = input('Press any key to close')
@@ -36,7 +36,7 @@ class TheWayChurchFinance:
         self.end_date = ''
 
     def main(self):
-        self.create_copy_of_old_finance_sheet()
+        # self.create_copy_of_old_finance_sheet()
         
         # Creating pd.Dataframe of files
         self.account_codes = self.get_dataframe_of_file(self.account_codes_file)
@@ -53,9 +53,9 @@ class TheWayChurchFinance:
         self.account_history_checks = self.extract_account_history_checks()
 
         # Creating Excel with data extracted
-        # TODO Create Summary Sheet for budgets and expenses
         self.create_finance_sheet_AccountCodeBalance()
         self.create_finance_sheet_MatchedChecks()
+        # TODO Create Summary Sheet for budgets and expenses
         self.write_finance_sheet()
     
     def raise_exception(self, file_name, error_msg, index, row,  index_offset=2):
@@ -112,16 +112,7 @@ class TheWayChurchFinance:
             for sheet in self.finance_df:
                 sheet_name = sheet
 
-                startcol = 0 
-                # # Post DF starts +1 column away from Signed DF
-                if ' ' in sheet:
-                    if 'Post' in sheet:
-                        # TODO create mini table on side with sum of signed and pending checks per month in each Post sheet
-                        # startcol = len(self.finance_df[sheet].columns) + 1
-                        pass
-                    temp_sheet_name = sheet_name.split()[0]
-                
-                self.finance_df[sheet].to_excel(writer, sheet_name=sheet_name, index=False, startcol=startcol)
+                self.finance_df[sheet].to_excel(writer, sheet_name=sheet_name, index=False)
                 worksheet = writer.sheets[sheet_name]
 
                 # Get the dimensions of the dataframe.
@@ -130,14 +121,22 @@ class TheWayChurchFinance:
                 # Set the autofilter.
                 worksheet.autofilter(0, 0, max_row, max_col - 1)
 
+                startcol = 0
+                # Post DF starts +1 column away from Signed DF
+                if 'Post' in sheet or 'Signed' in sheet:
+                    self.month_year_sum_dfs[sheet]
+                    startcol = len(self.finance_df[sheet].columns) + 1
+                    self.month_year_sum_dfs[sheet].to_excel(writer, sheet_name=sheet_name, index=False, startcol=startcol)
+                
                 # Make the columns wider for clarity
-                worksheet.set_column(0,  max_col - 1, 15)
+                worksheet.set_column(0,  max_col+startcol - 1, 15)
                 money_format = workbook.add_format({'num_format': '$#,##0.00'})
                 # Formatting Money Columns
                 if sheet_name == 'AccountCodeBalance':
                     worksheet.set_column(5, 5+len(month_year), None, money_format)
                 elif 'Post' in sheet_name or 'Signed' in sheet_name:
                     worksheet.set_column(2, 3, None, money_format)
+                    worksheet.set_column(8, 9, None, money_format)
 
                 # TODO need to merge cells
                 # https://xlsxwriter.readthedocs.io/example_merge1.html?highlight=merged
@@ -310,7 +309,7 @@ class TheWayChurchFinance:
         latest_month = ''
         date = self.start_datetime
         while date < self.end_datetime:
-            month_year_text = date.strftime('%h%Y')
+            month_year_text = date.strftime('%h %Y')
             latest_month = month_year_text
             month_year_signed_text = f'{month_year_text} Signed'
             month_year_posted_text = f'{month_year_text} Post'
@@ -335,7 +334,7 @@ class TheWayChurchFinance:
                 new_row_data['Paid'] = payment
                 new_row_data['Post Date'] = matched_checks_dict[check]['Post Date']
                 # Adding to appropriate Month Year Post Sheet
-                post_month_year_text = datetime.datetime.strptime(new_row_data['Post Date'], '%m/%d/%Y').strftime('%h%Y')
+                post_month_year_text = datetime.datetime.strptime(new_row_data['Post Date'], '%m/%d/%Y').strftime('%h %Y')
                 month_year_posted_text = f'{post_month_year_text} Post'
                 matched_checks_dfs[month_year_posted_text] = matched_checks_dfs[month_year_posted_text].append(new_row_data, ignore_index=True)
             else:
@@ -343,7 +342,7 @@ class TheWayChurchFinance:
                 unmatched_checks.append(new_row_data)
             
             # Adding to appropriate Month Year Signed Sheet
-            sign_month_year_text = datetime.datetime.strptime(new_row_data['Signed Date'], '%m/%d/%Y').strftime('%h%Y')
+            sign_month_year_text = datetime.datetime.strptime(new_row_data['Signed Date'], '%m/%d/%Y').strftime('%h %Y')
             month_year_signed_text = f'{sign_month_year_text} Signed'
             matched_checks_dfs[month_year_signed_text] = matched_checks_dfs[month_year_signed_text].append(new_row_data, ignore_index=True)
         
@@ -355,6 +354,29 @@ class TheWayChurchFinance:
         # Adding all matched_checks_dfs into finance_df
         self.finance_df.update(matched_checks_dfs)
 
+        # Calculating the Sum of Paid and Pending per month on each MonthYear sheet
+        self.month_year_sum_dfs = {}
+        for sheet in matched_checks_dfs:
+            month_year_paid_pending = {}
+            for index, row in matched_checks_dfs[sheet].iterrows():
+                sign_month_year_text = datetime.datetime.strptime(row['Signed Date'], '%m/%d/%Y').strftime('%h %Y')
+                if not month_year_paid_pending.get(sign_month_year_text):
+                    month_year_paid_pending[sign_month_year_text] = {'Paid':0, 'Pending':0}
+                if row['Paid']:
+                    month_year_paid_pending[sign_month_year_text]['Paid'] += row['Paid']
+                else:
+                    month_year_paid_pending[sign_month_year_text]['Pending'] += row['Pending']
+            
+            paid_pending_sum_df = pd.DataFrame(columns=['Month Year', 'Paid', 'Pending'])
+            for month_year in month_year_paid_pending:
+                new_row_data = {
+                    'Month Year': month_year, 
+                    'Paid': month_year_paid_pending[month_year]['Paid'], 
+                    'Pending': month_year_paid_pending[month_year]['Pending']
+                }
+                paid_pending_sum_df = paid_pending_sum_df.append(new_row_data, ignore_index=True)
+            self.month_year_sum_dfs[sheet] = paid_pending_sum_df
+            
 
 if __name__ == '__main__':
     the_way_church_finance = TheWayChurchFinance()
