@@ -53,15 +53,20 @@ class TheWayChurchFinance:
         self.account_history_checks = self.extract_account_history_checks()
 
         # Creating Excel with data extracted
+        # TODO Create Summary Sheet for budgets and expenses
         self.create_finance_sheet_AccountCodeBalance()
         self.create_finance_sheet_MatchedChecks()
         self.write_finance_sheet()
     
     def raise_exception(self, file_name, error_msg, index, row,  index_offset=2):
+        print()
+        print('********************************************************')
         print(f'____________FIX ERROR in {file_name}____________')
         print(f'{error_msg} in {file_name}')
         print(f'ROW #{index + index_offset}')
         print(row)
+        print('********************************************************')
+        print()
         raise Exception(f'{error_msg} in {file_name}')
 
     def create_copy_of_old_finance_sheet(self):
@@ -111,6 +116,7 @@ class TheWayChurchFinance:
                 # # Post DF starts +1 column away from Signed DF
                 if ' ' in sheet:
                     if 'Post' in sheet:
+                        # TODO create mini table on side with sum of signed and pending checks per month in each Post sheet
                         # startcol = len(self.finance_df[sheet].columns) + 1
                         pass
                     temp_sheet_name = sheet_name.split()[0]
@@ -133,9 +139,13 @@ class TheWayChurchFinance:
                 elif 'Post' in sheet_name or 'Signed' in sheet_name:
                     worksheet.set_column(2, 3, None, money_format)
 
+                # TODO need to merge cells
+                # https://xlsxwriter.readthedocs.io/example_merge1.html?highlight=merged
+
     def extract_account_codes(self):
         print('Extracting Account Codes')
         account_codes_extracted = {}
+        # TODO Need to add Budget, Total Expense, and Percentage Columns
         for index, row in self.account_codes.iterrows():
             row_data = {
                 'Account Group Name': row['Account Group Name'] if not pd.isna(row['Account Group Name']) else '',
@@ -199,6 +209,8 @@ class TheWayChurchFinance:
     def extract_account_history_checks(self):
         print('Extracting AccountHistory Checks')
         account_history_checks = {}
+        unmatched_checks = {}
+        lowest_check_num = min([check for check in self.journal_checks.keys() if check > 10000])
         for index, row in self.account_history.iterrows():
             date = datetime.datetime.strptime(row['Post Date'], '%m/%d/%Y')
             if self.start_datetime < date < self.end_datetime:
@@ -207,11 +219,41 @@ class TheWayChurchFinance:
                     'Debit': row['Debit'] if not pd.isna(row['Debit']) else 0,
                     'Credit': row['Credit'] if not pd.isna(row['Credit']) else 0,
                 }
+                # Getting Check Number from row
+                check_num = 0
                 if not pd.isna(row['Check']): # Check Number
-                    account_history_checks[int(row['Check'])] = row_data
+                    check_num = int(row['Check'])
                 elif row['Description'] and 'CHECK' in row['Description']:
                     check_num = int(row['Description'].split()[-1])
-                    account_history_checks[check_num] = row_data
+
+                # Continues to next row if check_num is still 0 or old check_num
+                if not check_num or 'STOP' in row['Description'] or check_num < lowest_check_num:
+                    continue
+                # Adds unmatched check to unmatched_checks
+                if not self.journal_checks.get(check_num):
+                    row_data['index'] = index
+                    row_data['row'] = row
+                    unmatched_checks[check_num] = row_data
+                    continue
+                # Verifying Check Number is in journal and Check amount matches
+                if self.journal_checks[check_num]['Payment'] != row_data['Debit']:
+                    print()
+                    print('Check Amount in Journal', self.journal_checks[check_num]['Payment'])
+                    print('Check Amount in AccountHistory', row_data['Debit'])
+                    self.raise_exception(self.account_history_file, f'Journal Check and AccountHistory Amount doesnt match {check_num}', index, row)
+                account_history_checks[check_num] = row_data
+        
+        # Stop program if any unmatched_checks
+        if unmatched_checks:
+            for check_num in unmatched_checks:
+                possible_checks = [check for check in self.journal_checks if self.journal_checks[check]['Payment'] == unmatched_checks[check_num]['Debit'] \
+                                   and check not in account_history_checks]
+                print()
+                print(f'Unmatched Check Number in AccountHistory {check_num}')
+                print('Possible Checks that match Payment amount and not already matched')
+                print(possible_checks)
+                self.raise_exception(self.account_history_file, f'Unmatched Check Number {check_num}', unmatched_checks[check_num]['index'], unmatched_checks[check_num]['row'])
+
         return account_history_checks
 
     def create_finance_sheet_AccountCodeBalance(self):
