@@ -40,6 +40,7 @@ class TheWayChurchFinance:
         
         # Creating pd.Dataframe of files
         self.account_codes = self.get_dataframe_of_file(self.account_codes_file)
+        self.account_codes = self.account_codes.fillna(method='ffill')
         self.journal = self.get_dataframe_of_file(self.journal_file)
         self.account_history = self.get_dataframe_of_file(self.account_history_file)
     
@@ -93,6 +94,31 @@ class TheWayChurchFinance:
         if '.xlsx' in file_name:
             return pd.read_excel(file_name)
 
+    def merge_cells_for_list_of_columns(self, writer, sheet, columns):
+        # Merging Cells for
+        workbook  = writer.book
+        worksheet = writer.sheets[sheet]
+        for column_name in columns:
+            column_index = list(self.finance_df[sheet].columns).index(column_name)
+            startCells = [1]
+            for row in range(2,len(self.finance_df[sheet])+1):
+                if (self.finance_df[sheet].loc[row-1, column_name] != self.finance_df[sheet].loc[row-2, column_name]):
+                    startCells.append(row)
+            
+            lastRow = len(self.finance_df[sheet])
+            for row in startCells:
+                try:
+                    endRow = startCells[startCells.index(row)+1]-1
+                    if row == endRow:
+                        worksheet.write(row, column_index, self.finance_df[sheet].loc[row-1, column_name])
+                    else:
+                        worksheet.merge_range(row, column_index, endRow, column_index, self.finance_df[sheet].loc[row-1, column_name])
+                except IndexError:
+                    if row == lastRow:
+                        worksheet.write(row, column_index, self.finance_df[sheet].loc[row-1, column_name])
+                    else:
+                        worksheet.merge_range(row, column_index, lastRow, column_index, self.finance_df[sheet].loc[row-1, column_name])
+
     def write_finance_sheet(self):
         # finance_df is a dict of pandas.DataFrame
         # Create or overwrite sheet
@@ -110,10 +136,8 @@ class TheWayChurchFinance:
             
             # Putting All Sheets into xlsx
             for sheet in self.finance_df:
-                sheet_name = sheet
-
-                self.finance_df[sheet].to_excel(writer, sheet_name=sheet_name, index=False)
-                worksheet = writer.sheets[sheet_name]
+                self.finance_df[sheet].to_excel(writer, sheet_name=sheet, index=False)
+                worksheet = writer.sheets[sheet]
 
                 # Get the dimensions of the dataframe.
                 (max_row, max_col) = self.finance_df[sheet].shape
@@ -126,20 +150,22 @@ class TheWayChurchFinance:
                 if 'Post' in sheet or 'Signed' in sheet:
                     self.month_year_sum_dfs[sheet]
                     startcol = len(self.finance_df[sheet].columns) + 1
-                    self.month_year_sum_dfs[sheet].to_excel(writer, sheet_name=sheet_name, index=False, startcol=startcol)
+                    self.month_year_sum_dfs[sheet].to_excel(writer, sheet_name=sheet, index=False, startcol=startcol)
                 
+                if sheet == 'AccountCodeBalance':
+                    self.merge_cells_for_list_of_columns(writer, sheet, ['Account Group Name', 'Account Group', 'Budget'])
+
                 # Make the columns wider for clarity
-                worksheet.set_column(0,  max_col+startcol - 1, 15)
-                money_format = workbook.add_format({'num_format': '$#,##0.00'})
+                money_format = workbook.add_format({'num_format': '$#,##0.00', 'align': 'center', 'valign': 'vcenter'})
+                center_format = workbook.add_format({'align': 'center', 'valign': 'vcenter'})
+                worksheet.set_column(0,  max_col+startcol - 1, 15, center_format)
                 # Formatting Money Columns
-                if sheet_name == 'AccountCodeBalance':
-                    worksheet.set_column(5, 5+len(month_year), None, money_format)
-                elif 'Post' in sheet_name or 'Signed' in sheet_name:
+                if sheet == 'AccountCodeBalance':
+                    # worksheet.set_column(0, 5, None, center_format)
+                    worksheet.set_column(5, 6+len(month_year), None, money_format)
+                elif 'Post' in sheet or 'Signed' in sheet:
                     worksheet.set_column(2, 3, None, money_format)
                     worksheet.set_column(8, 9, None, money_format)
-
-                # TODO need to merge cells
-                # https://xlsxwriter.readthedocs.io/example_merge1.html?highlight=merged
 
     def extract_account_codes(self):
         print('Extracting Account Codes')
