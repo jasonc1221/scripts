@@ -125,6 +125,23 @@ class TheWayChurchFinance:
                         worksheet.write(row, column_index, self.finance_df[sheet].loc[row-1, column_name])
                     else:
                         worksheet.merge_range(row, column_index, lastRow, column_index, self.finance_df[sheet].loc[row-1, column_name])
+    
+    def get_merge_cells_ranges(self, df, column_name):
+        cell_start_end_indexes = {}
+        start_index = 0
+        end_index = 9999
+        initial_value = None
+        for index, row in self.account_codes.iterrows():
+            if row[column_name] != initial_value:
+                if index != 0:
+                    end_index = index -1 if end_index < start_index else end_index
+                    cell_start_end_indexes[initial_value] = {'start': start_index, 'end': end_index}
+                initial_value = row[column_name]
+                start_index = index
+            else:
+                end_index = index
+        cell_start_end_indexes[initial_value] = {'start': start_index, 'end': end_index+1}
+        return cell_start_end_indexes
 
     def write_finance_sheet(self):
         # finance_df is a dict of pandas.DataFrame
@@ -159,7 +176,7 @@ class TheWayChurchFinance:
                     startcol = len(self.finance_df[sheet].columns) + 1
                     self.month_year_sum_dfs[sheet].to_excel(writer, sheet_name=sheet, index=False, startcol=startcol)
                 
-                # Writing Formulas for AccountCodeBalance
+                # Write Formulas for AccountCodeBalance
                 if sheet == 'AccountCodeBalance':
                     # Sum Expense Breakdown Based on Account Group
                     account_group_cell_ranges = self.get_merge_cells_ranges(self.finance_df[sheet], 'Account Group')
@@ -211,23 +228,6 @@ class TheWayChurchFinance:
                 elif 'Post' in sheet or 'Signed' in sheet:
                     worksheet.set_column(2, 3, None, money_format)
                     worksheet.set_column(8, 9, None, money_format)
-
-    def get_merge_cells_ranges(self, df, column_name):
-        cell_start_end_indexes = {}
-        start_index = 0
-        end_index = 9999
-        initial_value = None
-        for index, row in self.account_codes.iterrows():
-            if row[column_name] != initial_value:
-                if index != 0:
-                    end_index = index -1 if end_index < start_index else end_index
-                    cell_start_end_indexes[initial_value] = {'start': start_index, 'end': end_index}
-                initial_value = row[column_name]
-                start_index = index
-            else:
-                end_index = index
-        cell_start_end_indexes[initial_value] = {'start': start_index, 'end': end_index+1}
-        return cell_start_end_indexes
 
     def extract_account_codes(self):
         print('Extracting Account Codes')
