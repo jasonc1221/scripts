@@ -15,7 +15,7 @@ class TheWayChurchFinance:
         self.account_history_file = 'AccountHistory.csv'
         self.finance_df = {}
 
-        self.get_args()
+        # self.get_args()
         self.main()
         print('**********PROGRAM RAN SUCCESSFULLY**********')
         # close = input('Press any key to close')
@@ -36,7 +36,7 @@ class TheWayChurchFinance:
         self.end_date = ''
 
     def main(self):
-        self.create_copy_of_old_finance_sheet()
+        # self.create_copy_of_old_finance_sheet()
         
         # Creating pd.Dataframe of files
         self.account_codes = self.get_dataframe_of_file(self.account_codes_file)
@@ -47,6 +47,10 @@ class TheWayChurchFinance:
         # Creating the start and end datetime variables
         self.start_datetime = datetime.datetime.strptime(self.start_date, '%m/%Y') if self.start_date else datetime.datetime.strptime('01/2021', '%m/%Y')
         self.end_datetime = datetime.datetime.strptime(self.end_date, '%m/%Y') if self.end_date else datetime.datetime.now()
+        # Get previous year
+        self.prev_year = str(int(self.start_datetime.strftime('%Y'))-1)
+        self.prev_year_datetime = datetime.datetime.strptime('1/' + self.prev_year, '%m/%Y')
+
 
         # Extracting data from files
         self.account_codes_extracted = self.extract_account_codes()
@@ -159,11 +163,14 @@ class TheWayChurchFinance:
 
                 # Make the columns wider for clarity
                 money_format = workbook.add_format({'num_format': '$#,##0.00', 'align': 'center', 'valign': 'vcenter'})
+                percentage_format =  workbook.add_format({'num_format': '0%', 'align': 'center', 'valign': 'vcenter'})
                 center_format = workbook.add_format({'align': 'center', 'valign': 'vcenter'})
                 worksheet.set_column(0,  max_col+startcol - 1, 15, center_format)
                 # Formatting Money Columns
                 if sheet == 'AccountCodeBalance':
-                    worksheet.set_column(5, 6+len(month_year), None, money_format)
+                    worksheet.set_column(5, 7, None, money_format)
+                    worksheet.set_column(8, 8, None, percentage_format)
+                    worksheet.set_column(9, 9+len(month_year), None, money_format)
                 elif 'Post' in sheet or 'Signed' in sheet:
                     worksheet.set_column(2, 3, None, money_format)
                     worksheet.set_column(8, 9, None, money_format)
@@ -171,7 +178,6 @@ class TheWayChurchFinance:
     def extract_account_codes(self):
         print('Extracting Account Codes')
         account_codes_extracted = {}
-        # TODO Need to add Budget, Total Expense, and Percentage Columns
         for index, row in self.account_codes.iterrows():
             row_data = {
                 'Account Group Name': row['Account Group Name'] if not pd.isna(row['Account Group Name']) else '',
@@ -216,6 +222,11 @@ class TheWayChurchFinance:
                     }
                 except:
                     self.raise_exception(self.journal_file, f'Bad Row', index, row)
+
+                # Change date if Account is old Check with Account Code of 1
+                if row_data['Account'] == 1:
+                    date = self.prev_year_datetime
+                    row_data['Date'] = self.prev_year_datetime.strftime('%m/%d/%Y')
                 # Get month year of the journal check e.g Jan 2021, Feb 2021, Mar 2021...
                 month_year_text = date.strftime('%h %Y')
                 # Add to Account Code month sum
@@ -285,13 +296,20 @@ class TheWayChurchFinance:
         print('Creating Finance Sheet AccountCodeBalance')
         sheet_name = 'AccountCodeBalance'
         account_codes_balance_df = self.account_codes.copy(deep=True)
+
+        # TODO Create Columns for Total Expense, Expense Breakdown, and Percentage Columns
+        account_codes_balance_df['Total Expense'] = float(0)
+        account_codes_balance_df['Expense Breakdown'] = float(0)
+        account_codes_balance_df['Budget Percentage'] = float(0)
+        # TODO Add sum columns of Actual Expenses, calculate Budget Used %, sum Break Down Based on Account Group
+
         # Create columns with month_year_sum from account_codes_extracted
         date = self.start_datetime
         while date < self.end_datetime:
             # Create new month year column if does not exist
             month_year_text = date.strftime('%h %Y')
             if month_year_text not in account_codes_balance_df.columns:
-                account_codes_balance_df[month_year_text] = '0'
+                account_codes_balance_df[month_year_text] = float(0)
             
             # Change value of month year sum if sum exists
             for index, row in account_codes_balance_df.iterrows():
@@ -303,7 +321,6 @@ class TheWayChurchFinance:
             # Increment date month by 1
             date = date + relativedelta(months=+1)
         
-        # TODO Add sum columns of Actual Expenses, calculate Budget Used %, sum Break Down Based on Account Group
         # Create AccountCodeBalance sheet
         self.finance_df[sheet_name] = account_codes_balance_df
 
@@ -321,14 +338,14 @@ class TheWayChurchFinance:
 
         # checks_matching data
         matched_checks_dict = {}
-        matched_sum = 0
+        # matched_sum = 0
         for check in checks_matching:
             matched_checks_dict[check] = self.journal_checks[check]
             matched_checks_dict[check]['Post Date'] = self.account_history_checks[check]['Post Date']
-            matched_sum += self.journal_checks[check]['Payment']
-            matched_sum = round(matched_sum, 2)
-        start_month_day_year = self.start_datetime.strftime('%h %d %Y')
-        end_month_day_year = self.end_datetime.strftime('%h %d %Y')
+            # matched_sum += self.journal_checks[check]['Payment']
+            # matched_sum = round(matched_sum, 2)
+        # start_month_day_year = self.start_datetime.strftime('%h %d %Y')
+        # end_month_day_year = self.end_datetime.strftime('%h %d %Y')
         # print(f'Sum of Journal Checks in AccountHistory between {start_month_day_year} - {end_month_day_year}: ${matched_sum}')
         
         # Create matched_checks_df for all months
@@ -371,7 +388,9 @@ class TheWayChurchFinance:
             # Adding to appropriate Month Year Signed Sheet
             sign_month_year_text = datetime.datetime.strptime(new_row_data['Signed Date'], '%m/%d/%Y').strftime('%h %Y')
             month_year_signed_text = f'{sign_month_year_text} Signed'
-            matched_checks_dfs[month_year_signed_text] = matched_checks_dfs[month_year_signed_text].append(new_row_data, ignore_index=True)
+            # Don't add prev year signed date to a non-existent sheet
+            if self.prev_year not in month_year_signed_text:
+                matched_checks_dfs[month_year_signed_text] = matched_checks_dfs[month_year_signed_text].append(new_row_data, ignore_index=True)
         
         # Adding all unmatched checks to latest Month Year Post Sheet
         month_year_posted_text = f'{latest_month} Post'
