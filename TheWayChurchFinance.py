@@ -1,4 +1,5 @@
 import pandas as pd
+from xlsxwriter.utility import xl_rowcol_to_cell
 import argparse
 import datetime
 import os
@@ -15,7 +16,7 @@ class TheWayChurchFinance:
         self.account_history_file = 'AccountHistory.csv'
         self.finance_df = {}
 
-        # self.get_args()
+        self.get_args()
         self.main()
         print('**********PROGRAM RAN SUCCESSFULLY**********')
         # close = input('Press any key to close')
@@ -36,7 +37,7 @@ class TheWayChurchFinance:
         self.end_date = ''
 
     def main(self):
-        # self.create_copy_of_old_finance_sheet()
+        self.create_copy_of_old_finance_sheet()
         
         # Creating pd.Dataframe of files
         self.account_codes = self.get_dataframe_of_file(self.account_codes_file)
@@ -158,12 +159,48 @@ class TheWayChurchFinance:
                     startcol = len(self.finance_df[sheet].columns) + 1
                     self.month_year_sum_dfs[sheet].to_excel(writer, sheet_name=sheet, index=False, startcol=startcol)
                 
+                # Writing Formulas for AccountCodeBalance
                 if sheet == 'AccountCodeBalance':
+                    # Sum Expense Breakdown Based on Account Group
+                    account_group_cell_ranges = self.get_merge_cells_ranges(self.finance_df[sheet], 'Account Group')
+                    e_b_column_index = list(self.finance_df[sheet].columns).index('Expense Breakdown')
+                    for account_group in account_group_cell_ranges:
+                        start_index, end_index = account_group_cell_ranges[account_group]['start'] + 1, account_group_cell_ranges[account_group]['end'] + 1
+                        start_cell = xl_rowcol_to_cell(start_index, e_b_column_index + 2)
+                        end_cell = xl_rowcol_to_cell(end_index, e_b_column_index + self.num_of_months + 1)
+                        excel_cell_range = f'{start_cell}:{end_cell}'
+                        if start_index != end_index:
+                            worksheet.merge_range(start_index, e_b_column_index, end_index, e_b_column_index, float(0))
+                        worksheet.write_formula(start_index, e_b_column_index, f'=SUM({excel_cell_range})')
+
+                    # Sum Total Expenses from Expense Breakdown
+                    budget_cell_ranges = self.get_merge_cells_ranges(self.finance_df[sheet], 'Budget')
+                    t_e_column_index = list(self.finance_df[sheet].columns).index('Total Expense')
+                    for budget in budget_cell_ranges:
+                        start_index, end_index = budget_cell_ranges[budget]['start'] + 1,  budget_cell_ranges[budget]['end'] + 1
+                        start_cell = xl_rowcol_to_cell(start_index, t_e_column_index + 1)
+                        end_cell = xl_rowcol_to_cell(end_index, t_e_column_index + 1)
+                        excel_cell_range = f'{start_cell}:{end_cell}'
+                        if start_index != end_index:
+                            worksheet.merge_range(start_index, t_e_column_index, end_index, t_e_column_index, float(0))
+                        worksheet.write_formula(start_index, t_e_column_index, f'=SUM({excel_cell_range})')
+
+                    # Calculate Budget Percentage
+                    budget_cell_ranges = self.get_merge_cells_ranges(self.finance_df[sheet], 'Budget')
+                    budget_column_index = list(self.finance_df[sheet].columns).index('Budget')
+                    b_p_column_index = list(self.finance_df[sheet].columns).index('Budget Percentage')
+                    for budget in budget_cell_ranges:
+                        start_index, end_index = budget_cell_ranges[budget]['start'] + 1,  budget_cell_ranges[budget]['end'] + 1
+                        budget_cell = xl_rowcol_to_cell(start_index, budget_column_index)
+                        t_e_cell = xl_rowcol_to_cell(start_index, t_e_column_index)
+                        if start_index != end_index:
+                            worksheet.merge_range(start_index, b_p_column_index, end_index, b_p_column_index, float(0))
+                        worksheet.write_formula(start_index, b_p_column_index, f'={t_e_cell}/{budget_cell}')
                     self.merge_cells_for_list_of_columns(writer, sheet, ['Account Group Name', 'Account Group', 'Budget'])
 
                 # Make the columns wider for clarity
                 money_format = workbook.add_format({'num_format': '$#,##0.00', 'align': 'center', 'valign': 'vcenter'})
-                percentage_format =  workbook.add_format({'num_format': '0%', 'align': 'center', 'valign': 'vcenter'})
+                percentage_format =  workbook.add_format({'num_format': '0.00%', 'align': 'center', 'valign': 'vcenter'})
                 center_format = workbook.add_format({'align': 'center', 'valign': 'vcenter'})
                 worksheet.set_column(0,  max_col+startcol - 1, 15, center_format)
                 # Formatting Money Columns
@@ -174,6 +211,23 @@ class TheWayChurchFinance:
                 elif 'Post' in sheet or 'Signed' in sheet:
                     worksheet.set_column(2, 3, None, money_format)
                     worksheet.set_column(8, 9, None, money_format)
+
+    def get_merge_cells_ranges(self, df, column_name):
+        cell_start_end_indexes = {}
+        start_index = 0
+        end_index = 9999
+        initial_value = None
+        for index, row in self.account_codes.iterrows():
+            if row[column_name] != initial_value:
+                if index != 0:
+                    end_index = index -1 if end_index < start_index else end_index
+                    cell_start_end_indexes[initial_value] = {'start': start_index, 'end': end_index}
+                initial_value = row[column_name]
+                start_index = index
+            else:
+                end_index = index
+        cell_start_end_indexes[initial_value] = {'start': start_index, 'end': end_index+1}
+        return cell_start_end_indexes
 
     def extract_account_codes(self):
         print('Extracting Account Codes')
@@ -297,15 +351,16 @@ class TheWayChurchFinance:
         sheet_name = 'AccountCodeBalance'
         account_codes_balance_df = self.account_codes.copy(deep=True)
 
-        # TODO Create Columns for Total Expense, Expense Breakdown, and Percentage Columns
+        # Create Columns for Total Expense, Expense Breakdown, and Percentage Columns
         account_codes_balance_df['Total Expense'] = float(0)
         account_codes_balance_df['Expense Breakdown'] = float(0)
         account_codes_balance_df['Budget Percentage'] = float(0)
-        # TODO Add sum columns of Actual Expenses, calculate Budget Used %, sum Break Down Based on Account Group
 
         # Create columns with month_year_sum from account_codes_extracted
+        self.num_of_months = 0
         date = self.start_datetime
         while date < self.end_datetime:
+            self.num_of_months += 1
             # Create new month year column if does not exist
             month_year_text = date.strftime('%h %Y')
             if month_year_text not in account_codes_balance_df.columns:
@@ -388,7 +443,7 @@ class TheWayChurchFinance:
             # Adding to appropriate Month Year Signed Sheet
             sign_month_year_text = datetime.datetime.strptime(new_row_data['Signed Date'], '%m/%d/%Y').strftime('%h %Y')
             month_year_signed_text = f'{sign_month_year_text} Signed'
-            # Don't add prev year signed date to a non-existent sheet
+            # Don't add prev year signed date check to a non-existent sheet
             if self.prev_year not in month_year_signed_text:
                 matched_checks_dfs[month_year_signed_text] = matched_checks_dfs[month_year_signed_text].append(new_row_data, ignore_index=True)
         
