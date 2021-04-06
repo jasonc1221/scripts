@@ -260,7 +260,7 @@ class TheWayChurchFinance:
                 if row['Account'] == '-split-':
                     # Ignore deposit rows
                     deposit = row['Deposit'] if not pd.isna(row['Deposit']) else 0
-                    if deposit:
+                    if deposit or not str(row['Account']).isdigit():
                         continue
                         # old code for adding up deposits
                         # self.account_codes_extracted[0][month_year_text] = self.account_codes_extracted[0].get(month_year_text, 0) + row_data['Deposit']
