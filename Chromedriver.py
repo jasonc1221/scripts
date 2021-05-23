@@ -42,6 +42,10 @@ class ChromeDriver:
                 WebDriverWait(self.driver, wait_time).until(ec.visibility_of_element_located((By.NAME, desired_element)))
             if by == 'class':
                 WebDriverWait(self.driver, wait_time).until(ec.visibility_of_element_located((By.CLASS_NAME, desired_element)))
+            if by == 'css':
+                WebDriverWait(self.driver, wait_time).until(ec.visibility_of_element_located((By.CSS_SELECTOR, desired_element)))
+            if by == 'id':
+                WebDriverWait(self.driver, wait_time).until(ec.visibility_of_element_located((By.ID, desired_element)))
         if wait_type == 'clickable':
             if by == 'xpath':
                 WebDriverWait(self.driver, wait_time).until(ec.element_to_be_clickable((By.XPATH, desired_element)))
@@ -49,6 +53,10 @@ class ChromeDriver:
                 WebDriverWait(self.driver, wait_time).until(ec.element_to_be_clickable((By.NAME, desired_element)))
             if by == 'class':
                 WebDriverWait(self.driver, wait_time).until(ec.element_to_be_clickable((By.CLASS_NAME, desired_element)))
+            if by == 'css':
+                WebDriverWait(self.driver, wait_time).until(ec.element_to_be_clickable((By.CSS_SELECTOR, desired_element)))
+            if by == 'id':
+                WebDriverWait(self.driver, wait_time).until(ec.element_to_be_clickable((By.ID, desired_element)))
         if wait_type == 'invisible':
             if by == 'xpath':
                 WebDriverWait(self.driver, wait_time).until(ec.invisibility_of_element_located((By.XPATH, desired_element)))
@@ -56,6 +64,10 @@ class ChromeDriver:
                 WebDriverWait(self.driver, wait_time).until(ec.invisibility_of_element_located((By.NAME, desired_element)))
             if by == 'class':
                 WebDriverWait(self.driver, wait_time).until(ec.invisibility_of_element_located((By.CLASS_NAME, desired_element)))
+            if by == 'css':
+                WebDriverWait(self.driver, wait_time).until(ec.invisibility_of_element_located((By.CSS_SELECTOR, desired_element)))
+            if by == 'id':
+                WebDriverWait(self.driver, wait_time).until(ec.invisibility_of_element_located((By.ID, desired_element)))
 
     def perform_action_list(self, action_list):
         for action in action_list:
