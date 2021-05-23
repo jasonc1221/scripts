@@ -221,6 +221,7 @@ class BestBuyBot():
         self.wait_on_element('credit-card-cvv', wait_type='visible', by='id')
         self.wait_on_element('credit-card-cvv', wait_type='clickable', by='id')
         self.driver.find_element_by_id('credit-card-cvv').send_keys(cvv)
+        print('Filled CVV info')
 
     @try_except_decorator
     def fill_billing_info(self):
@@ -233,10 +234,12 @@ class BestBuyBot():
         self.driver.find_element_by_xpath('/html/body/div[1]/div[2]/div/div[2]/div[1]/div[1]/main/div[2]/div[3]/div/section/form/div/section/div[7]/div/div[1]/label/div/input').send_keys(zipcode)
         self.driver.find_element_by_xpath('/html/body/div[1]/div[2]/div/div[2]/div[1]/div[1]/main/div[2]/div[3]/div/section/form/div/section/div[4]/label/div[2]/div/div/input').send_keys(street_address)
         self.driver.find_element_by_xpath('//*[@id="remember-this-information-for-next-time-generic"]').click()
+        print('Filled billing info')
 
     def click_on_final_checkout(self):
         self.wait_on_element('//*[@id="checkoutApp"]/div[2]/div[1]/div[1]/main/div[2]/div[3]/div/section/div[4]/button', wait_type='visible', by='xpath')
         self.driver.find_element_by_xpath('//*[@id="checkoutApp"]/div[2]/div[1]/div[1]/main/div[2]/div[3]/div/section/div[4]/button').click()
+        print('Clicked final checkout button')
 
     def wait_on_element(self, desired_element, wait_type='visible', by='xpath', wait_time=30):
         """
