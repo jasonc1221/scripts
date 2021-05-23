@@ -206,23 +206,23 @@ class BestBuyBot():
         self.wait_on_element("//*[@class='btn btn-lg btn-block btn-primary button__fast-track']", wait_type='clickable', by='xpath')
         self.driver.find_element_by_xpath("//*[@class='ispu-card__switch']").click()
 
+    @try_except_decorator
     def fill_shipping_info(self):
-        try:
-            self.driver.find_element_by_xpath('//*[@id="consolidatedAddresses.ui_address_2.firstName"]').send_keys(first_name)
-            self.driver.find_element_by_xpath('//*[@id="consolidatedAddresses.ui_address_2.lastName"]').send_keys(last_name)
-            self.driver.find_element_by_xpath('//*[@id="consolidatedAddresses.ui_address_2.street"]').send_keys(street_address)
-            self.driver.find_element_by_xpath('//*[@id="consolidatedAddresses.ui_address_2.city"]').send_keys(city)
-            self.driver.find_element_by_xpath('//*[@id="consolidatedAddresses.ui_address_2.state"]/option[9]').click() # CA ONLY
-            self.driver.find_element_by_xpath('//*[@id="consolidatedAddresses.ui_address_2.zipcode"]').send_keys(zipcode)
-            print('Filled shipping info')
-        except:
-            pass
+        self.driver.find_element_by_xpath('//*[@id="consolidatedAddresses.ui_address_2.firstName"]').send_keys(first_name)
+        self.driver.find_element_by_xpath('//*[@id="consolidatedAddresses.ui_address_2.lastName"]').send_keys(last_name)
+        self.driver.find_element_by_xpath('//*[@id="consolidatedAddresses.ui_address_2.street"]').send_keys(street_address)
+        self.driver.find_element_by_xpath('//*[@id="consolidatedAddresses.ui_address_2.city"]').send_keys(city)
+        self.driver.find_element_by_xpath('//*[@id="consolidatedAddresses.ui_address_2.state"]/option[9]').click() # CA ONLY
+        self.driver.find_element_by_xpath('//*[@id="consolidatedAddresses.ui_address_2.zipcode"]').send_keys(zipcode)
+        print('Filled shipping info')
 
+    @try_except_decorator
     def fill_cvv_number(self):
         self.wait_on_element('credit-card-cvv', wait_type='visible', by='id')
         self.wait_on_element('credit-card-cvv', wait_type='clickable', by='id')
         self.driver.find_element_by_id('credit-card-cvv').send_keys(cvv)
 
+    @try_except_decorator
     def fill_billing_info(self):
         self.wait_on_element('/html/body/div[1]/div[2]/div/div[2]/div[1]/div[1]/main/div[2]/div[3]/div/section/form/div/section/div[2]/label/div/input', wait_type='visible', by='xpath')
         self.wait_on_element('/html/body/div[1]/div[2]/div/div[2]/div[1]/div[1]/main/div[2]/div[3]/div/section/form/div/section/div[2]/label/div/input', wait_type='clickable', by='xpath')
