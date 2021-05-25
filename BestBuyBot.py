@@ -16,14 +16,17 @@ Multithreaded Best Buy Bot that will run multiple chrome windows for different p
 This program will send text message to user when program found product is avaiable
 
 There are some things necessary to be done to make program run:
-1. Download chromedriver that matches your current version of chrome and copy the path to line #31
+1. Download chromedriver that matches your current version of chrome and copy the path to line #34
 2. Create Best Buy Account and update your Shipping Address and Credit Card Info
 3. <Optional> Change email settings so that text message could be sent to phone. Current program set only for gmail accounts
-4. Add, delete, or comment any product urls into all_products list below in line #54. Works best with 3 urls. Links has to be similar format at below:
+4. Add, delete, or comment any product urls into all_products list below in line #57. Works best with 3 urls. Links has to be similar format at below:
    https://www.bestbuy.com/site/amd-ryzen-7-5800x-4th-gen-8-core-16-threads-unlocked-desktop-processor-without-cooler/6439000.p?skuId=6439000
 
-If want to test program comment out line #106 so it doesn't click on final checkout button
+If want to test program comment out line #215 so it doesn't click on final checkout button
 '''
+
+# Stop program if it exceeds max_fail_attempts with coding errors. Do not want endless loop broken code
+max_fail_attempts = 10
 
 # Will need to download chromedriver matching your chrome version
 # https://chromedriver.chromium.org/
@@ -64,15 +67,6 @@ all_products = [
     # 'https://www.bestbuy.com/site/evga-geforce-rtx-3080-ftw3-ultra-gaming-10gb-gddr6-pci-express-4-0-graphics-card/6436196.p?skuId=6436196',
 ]
 
-def try_except_decorator(function):
-    def wrapper(*args):
-        try:
-            return function(*args)
-        except Exception as e:
-            print(f'Failed {function.__name__}')
-            print(e)
-    return wrapper
-
 class BestBuyBot():
 
     def __init__(self, url):
@@ -88,30 +82,50 @@ class BestBuyBot():
         self.total_seconds = 0
         self.start_time = time.time()
         self.url = url
+        self.failed_attempts = 0
         self.login_to_best_buy_account()
-        while True:
-            try:
-                self.check_and_add_to_queue_bestbuy_product()
-                self.send_text_message()
-                self.click_add_to_cart_button_second_time()
-                self.verify_item_in_cart()
-                # self.login_again()
-                # self.click_shipping_options()
-                self.fill_shipping_info()
-                # Click on "Continue to Payment Information"
-                self.driver.maximize_window()
-                self.driver.find_element_by_xpath('//*[@id="checkoutApp"]/div[2]/div[1]/div[1]/main/div[2]/div[2]/form/section/div/div[2]/div/div/button').click()
-                self.fill_cvv_number()
-                self.fill_billing_info()
-                self.click_on_final_checkout() # Comment this line if you want to test code
-                print('Item has been purchased')
-                time.sleep(1800)
-                break
-            except Exception as e:
-                print(e)
-                print('Failed to order item. Trying Again')
+        self.check_verify_purchase_item()
 
-    @try_except_decorator
+    def try_except_decorator(function):
+        def wrapper(self, *args):
+            try:
+                return function(self, *args)
+            except Exception as e:
+                print(f'Failed {function.__name__}')
+                print(e)
+        return wrapper
+
+    def try_except_check_verify_purchase_item(function):
+        def wrapper(self, *args):
+            try:
+                return function(self, *args)
+            except Exception as e:
+                print(f'Failed {function.__name__}')
+                print(e)
+                if self.failed_attempts == max_fail_attempts:
+                    print('Exceeded failed attempts. Exiting Program')
+                    raise Exception('Program has stopped')
+                    exit()
+                print('Failed to add item to cart. Trying Again')
+                self.check_verify_purchase_item()
+        return wrapper
+
+    def try_except_purchase_item_from_cart(function):
+        def wrapper(self, *args):
+            try:
+                return function(self, *args)
+            except Exception as e:
+                self.failed_attempts += 1
+                print(f'Failed {function.__name__}')
+                print(e)
+                if self.failed_attempts == max_fail_attempts:
+                    print('Exceeded failed attempts. Exiting Program')
+                    raise Exception('Program has stopped')
+                    exit()
+                print('Failed to checkout item. Trying Again')
+                self.purchase_item_from_cart()
+        return wrapper
+    
     def login_to_best_buy_account(self):
         print('Logging in to BestBuy Account')
         login_link = 'https://www.bestbuy.com/identity/global/signin'
@@ -122,6 +136,13 @@ class BestBuyBot():
         self.wait_on_element('NextBestActionContainer', wait_type='visible', by='id')
         # self.driver.minimize_window()
 
+    def check_verify_purchase_item(self):
+        self.check_and_add_to_queue_bestbuy_product()
+        self.send_text_message()
+        self.click_add_to_cart_button_second_time()
+        self.purchase_item_from_cart()
+
+    @try_except_check_verify_purchase_item
     def check_and_add_to_queue_bestbuy_product(self):
         # Go to BestBuy product page
         self.driver.get(self.url)
@@ -165,6 +186,7 @@ class BestBuyBot():
         s.sendmail(email_user, my_phone_email, message)
         print('Sent text message to phone')
 
+    @try_except_check_verify_purchase_item
     def click_add_to_cart_button_second_time(self):
         while True:
             try:
@@ -182,6 +204,17 @@ class BestBuyBot():
             except(NoSuchElementException, TimeoutException) as error:
                 print(f'Failed to click "Add To Cart" button second time: \n{error}')
 
+    def purchase_item_from_cart(self):
+        self.verify_item_in_cart()
+        # self.login_again()
+        # self.click_shipping_options()
+        self.fill_shipping_info()
+        self.continue_to_payment()
+        self.fill_cvv_number()
+        self.fill_billing_info()
+        self.click_on_final_checkout() # Comment this line if you want to test code
+        print('Item has been purchased')
+
     def verify_item_in_cart(self):
         self.driver.get('https://www.bestbuy.com/cart')
         self.wait_on_element('//*[@id="cartApp"]/div[2]/div[1]/div/div[1]/div[1]/section[1]/div[1]/div/h1', wait_type='visible', by='xpath')
@@ -192,7 +225,7 @@ class BestBuyBot():
             self.driver.find_element_by_xpath('//*[@id="cartApp"]/div[2]/div[1]/div/div[1]/div[1]/section[2]/div/div/div[3]/div/div[1]/button').click()
             print('Verified item is in cart and clicked on "Checkout"')
         else:
-            raise Exception('Your cart is empty. Trying again')
+            self.check_verify_purchase_item()
 
     @try_except_decorator
     def login_again(self):
@@ -215,15 +248,21 @@ class BestBuyBot():
         self.driver.find_element_by_xpath('//*[@id="consolidatedAddresses.ui_address_2.state"]/option[9]').click() # CA ONLY
         self.driver.find_element_by_xpath('//*[@id="consolidatedAddresses.ui_address_2.zipcode"]').send_keys(zipcode)
         print('Filled shipping info')
+    
+    @try_except_purchase_item_from_cart
+    def continue_to_payment(self):
+        self.driver.maximize_window()
+        self.driver.find_element_by_xpath('//*[@id="checkoutApp"]/div[2]/div[1]/div[1]/main/div[2]/div[2]/form/section/div/div[2]/div/div/button').click()
+        print('Continued to payment')
 
-    @try_except_decorator
+    @try_except_purchase_item_from_cart
     def fill_cvv_number(self):
         self.wait_on_element('credit-card-cvv', wait_type='visible', by='id')
         self.wait_on_element('credit-card-cvv', wait_type='clickable', by='id')
         self.driver.find_element_by_id('credit-card-cvv').send_keys(cvv)
         print('Filled CVV info')
 
-    @try_except_decorator
+    @try_except_purchase_item_from_cart
     def fill_billing_info(self):
         self.wait_on_element('/html/body/div[1]/div[2]/div/div[2]/div[1]/div[1]/main/div[2]/div[3]/div/section/form/div/section/div[2]/label/div/input', wait_type='visible', by='xpath')
         self.wait_on_element('/html/body/div[1]/div[2]/div/div[2]/div[1]/div[1]/main/div[2]/div[3]/div/section/form/div/section/div[2]/label/div/input', wait_type='clickable', by='xpath')
@@ -236,10 +275,14 @@ class BestBuyBot():
         self.driver.find_element_by_xpath('//*[@id="remember-this-information-for-next-time-generic"]').click()
         print('Filled billing info')
 
+    @try_except_purchase_item_from_cart
     def click_on_final_checkout(self):
         self.wait_on_element('//*[@id="checkoutApp"]/div[2]/div[1]/div[1]/main/div[2]/div[3]/div/section/div[4]/button', wait_type='visible', by='xpath')
         self.driver.find_element_by_xpath('//*[@id="checkoutApp"]/div[2]/div[1]/div[1]/main/div[2]/div[3]/div/section/div[4]/button').click()
         print('Clicked final checkout button')
+        time.sleep(1800)
+        self.driver.quit()
+        exit()
 
     def wait_on_element(self, desired_element, wait_type='visible', by='xpath', wait_time=30):
         """
