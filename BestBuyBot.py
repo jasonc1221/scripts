@@ -16,17 +16,19 @@ Multithreaded Best Buy Bot that will run multiple chrome windows for different p
 This program will send text message to user when program found product is avaiable
 
 There are some things necessary to be done to make program run:
-1. Download chromedriver that matches your current version of chrome and copy the path to line #34
+1. Download chromedriver that matches your current version of chrome and copy the path to line #36
 2. Create Best Buy Account and update your Shipping Address and Credit Card Info
 3. <Optional> Change email settings so that text message could be sent to phone. Current program set only for gmail accounts
-4. Add, delete, or comment any product urls into all_products list below in line #57. Works best with 3 urls. Links has to be similar format at below:
+4. Add, delete, or comment any product urls into all_products list below in line #59. Works best with 3 urls. Links has to be similar format at below:
    https://www.bestbuy.com/site/amd-ryzen-7-5800x-4th-gen-8-core-16-threads-unlocked-desktop-processor-without-cooler/6439000.p?skuId=6439000
 
 If want to test program comment out line #215 so it doesn't click on final checkout button
 '''
 
 # Stop program if it exceeds max_fail_attempts with coding errors. Do not want endless loop broken code
+# Also stop program if it exceeds max_hours_runtime. Do not change the 60s. They are for 60 min * 60 sec
 max_fail_attempts = 10
+max_hours_runtime =  4 * 60 * 60
 
 # Will need to download chromedriver matching your chrome version
 # https://chromedriver.chromium.org/
@@ -58,13 +60,8 @@ all_products = [
     # 'https://www.bestbuy.com/site/amd-ryzen-7-5800x-4th-gen-8-core-16-threads-unlocked-desktop-processor-without-cooler/6439000.p?skuId=6439000', # Testing product with queue
     # 'https://www.bestbuy.com/site/nvidia-geforce-rtx-nvlink-bridge-for-3090-cards-space-gray/6441554.p?skuId=6441554',                            # Testing with normal product
     'https://www.bestbuy.com/site/nvidia-geforce-rtx-3080-10gb-gddr6x-pci-express-4-0-graphics-card-titanium-and-black/6429440.p?skuId=6429440',
-    'https://www.bestbuy.com/site/pny-geforce-rtx-3080-10gb-xlr8-gaming-epic-x-rgb-triple-fan-graphics-card/6432658.p?skuId=6432658',
-    'https://www.bestbuy.com/site/evga-geforce-rtx-3080-xc3-black-gaming-10gb-gddr6-pci-express-4-0-graphics-card/6432399.p?skuId=6432399',
-    # 'https://www.bestbuy.com/site/pny-geforce-rtx-3080-10gb-xlr8-gaming-epic-x-rgb-triple-fan-graphics-card/6432655.p?skuId=6432655',
-    # 'https://www.bestbuy.com/site/evga-geforce-rtx-3080-xc3-gaming-10gb-gddr6-pci-express-4-0-graphics-card/6436194.p?skuId=6436194',
-    # 'https://www.bestbuy.com/site/evga-geforce-rtx-3080-xc3-ultra-gaming-10gb-gddr6-pci-express-4-0-graphics-card/6432400.p?skuId=6432400',
-    # 'https://www.bestbuy.com/site/evga-geforce-rtx-3080-ftw3-gaming-10gb-gddr6x-pci-express-4-0-graphics-card/6436191.p?skuId=6436191',
-    # 'https://www.bestbuy.com/site/evga-geforce-rtx-3080-ftw3-ultra-gaming-10gb-gddr6-pci-express-4-0-graphics-card/6436196.p?skuId=6436196',
+    'https://www.bestbuy.com/site/evga-geforce-rtx-3080-xc3-ultra-gaming-10gb-gddr6-pci-express-4-0-graphics-card/6432400.p?skuId=6432400',
+    'https://www.bestbuy.com/site/gigabyte-nvidia-geforce-rtx-3080-eagle-oc-10gb-gddr6x-pci-express-4-0-graphics-card/6430621.p?skuId=6430621',
 ]
 
 class BestBuyBot():
@@ -166,6 +163,9 @@ class BestBuyBot():
             else:
                 # Print program runtime and refresh page
                 runtime = round(time.time() - self.start_time)
+                if runtime > max_hours_runtime:
+                    print('Program exceeded maximium hour runtime. Exiting program')
+                    exit()
                 sys.stdout.write('\r')
                 sys.stdout.write('Program Run Time {}'.format(str(datetime.timedelta(seconds=runtime))))
                 sys.stdout.flush()
